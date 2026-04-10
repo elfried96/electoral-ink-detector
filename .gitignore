@@ -1,0 +1,16 @@
+# Python / uv
+__pycache__/
+*.pyc
+*.pyo
+.venv/
+hand_landmarker.task
+
+# Node
+node_modules/
+.next/
+.env.local
+.env*.local
+
+# OS
+.DS_Store
+Thumbs.db
