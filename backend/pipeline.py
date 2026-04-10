@@ -309,6 +309,9 @@ def run_pipeline_mediapipe(image_rgb: np.ndarray, sensitivity: float = 1.8) -> D
             
             mp_image = mp.Image(image_format=mp.ImageFormat.SRGB, data=image_rgb)
             detection_result = detector.detect(mp_image)
+        except Exception as e:
+            print(f"[ERROR] MediaPipe initialization failed: {e}")
+            raise
         
         if not detection_result.hand_landmarks:
             print(f"[WARNING] Première tentative échouée. Image shape: {image_rgb.shape}")
@@ -413,14 +416,6 @@ def run_pipeline_mediapipe(image_rgb: np.ndarray, sensitivity: float = 1.8) -> D
                 'v': float(palm_color['v'])
             }
         }
-        
-        except Exception as mediapipe_error:
-            # Si MediaPipe échoue (libGL error), utiliser le pipeline CPU
-            print(f"[WARNING] MediaPipe failed: {mediapipe_error}")
-            print("[INFO] Falling back to CPU-only pipeline")
-            
-            from pipeline_cpu import run_pipeline_cpu
-            return run_pipeline_cpu(image_rgb, sensitivity)
             
     except Exception as e:
         return {
