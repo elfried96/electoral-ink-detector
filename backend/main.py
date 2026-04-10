@@ -13,8 +13,7 @@ import time
 from typing import Dict, Any
 import os
 
-from pipeline_wrapper import run_pipeline
-from pipeline import download_model_if_needed, check_image_quality
+from pipeline import run_pipeline_mediapipe as run_pipeline, download_model_if_needed, check_image_quality
 
 # Configuration du rate limiting
 limiter = Limiter(key_func=get_remote_address)

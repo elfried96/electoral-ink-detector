@@ -1,10 +1,19 @@
 services:
   - type: web
     name: ink-detection-api
-    runtime: docker
-    dockerfilePath: ./backend/Dockerfile
-    dockerContext: ./backend
+    env: python
+    region: frankfurt
+    plan: free
+    buildCommand: pip install uv && uv sync
+    startCommand: bash startup.sh
     envVars:
-      - key: PORT
-        value: 10000
-    healthCheckPath: /health
+      - key: PYTHON_VERSION
+        value: 3.12.0
+      - key: LIBGL_ALWAYS_SOFTWARE
+        value: "1"
+      - key: MESA_GL_VERSION_OVERRIDE
+        value: "3.3"
+      - key: MEDIAPIPE_DISABLE_GPU
+        value: "1"
+      - key: EGL_PLATFORM
+        value: surfaceless
