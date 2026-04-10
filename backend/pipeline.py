@@ -45,7 +45,7 @@ def check_image_quality(image_rgb: np.ndarray) -> Optional[Dict]:
     # Netteté (variance du Laplacian)
     gray = cv2.cvtColor(image_rgb, cv2.COLOR_RGB2GRAY)
     sharpness = float(cv2.Laplacian(gray, cv2.CV_64F).var())
-    if sharpness < 80:
+    if sharpness < 30:  # Seuil réduit de 80 à 30 - plus permissif
         return {
             'error': 'IMAGE_BLURRY',
             'message': 'Photo floue. Tenez le téléphone bien stable.'

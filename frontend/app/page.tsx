@@ -23,6 +23,7 @@ export default function Home() {
   const [errorData, setErrorData] = useState<{ code: string; message: string } | null>(null);
 
   useEffect(() => {
+    // Warmup initial
     warmupServer().then(ok => {
       if (!ok) {
         // Afficher banner discret "Démarrage du serveur (~30s)..."
@@ -38,6 +39,13 @@ export default function Home() {
         setTimeout(() => clearInterval(interval), 60000);
       }
     });
+    
+    // Keep-alive : ping toutes les 5 minutes pour éviter le sleep
+    const keepAlive = setInterval(() => {
+      warmupServer();
+    }, 5 * 60 * 1000); // 5 minutes
+    
+    return () => clearInterval(keepAlive);
   }, []);
 
   const handleCapture = useCallback((file: File) => {
