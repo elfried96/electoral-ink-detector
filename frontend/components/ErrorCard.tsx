@@ -31,7 +31,7 @@ const ERROR_MESSAGES: Record<string, {
   },
   NO_HAND_DETECTED: { 
     title: 'Main non détectée', 
-    action: 'Montrez votre paume ouverte, pouce et index visibles', 
+    action: 'Placez votre main ouverte face à la caméra. Assurez-vous que toute la paume et les 5 doigts sont bien visibles dans un bon éclairage.', 
     icon: <Hand size={48} className="text-orange-500" />
   },
   TOO_MANY_REQUESTS: { 

@@ -311,42 +311,53 @@ def run_pipeline(image_rgb: np.ndarray, sensitivity: float = 1.8) -> Dict:
         detection_result = detector.detect(mp_image)
         
         if not detection_result.hand_landmarks:
-            print("[WARNING] Aucune main détectée, analyse de l'image entière")
-            # Analyser l'image entière comme fallback
-            hsv = cv2.cvtColor(cv2.cvtColor(image_rgb, cv2.COLOR_RGB2BGR), cv2.COLOR_BGR2HSV)
+            print(f"[ERROR] Aucune main détectée. Image shape: {image_rgb.shape}")
+            # Essayons avec différents prétraitements
             
-            # Chercher des pixels violets/bleus dans toute l'image
-            lower_purple = np.array([100, 50, 50])
-            upper_purple = np.array([170, 255, 255])
-            mask = cv2.inRange(hsv, lower_purple, upper_purple)
+            # Tentative 1: Image originale sans normalisation
+            try:
+                print("[RETRY] Tentative sans normalisation de lumière...")
+                mp_image_raw = mp.Image(image_format=mp.ImageFormat.SRGB, data=image_rgb)
+                detection_result = detector.detect(mp_image_raw)
+                
+                if detection_result.hand_landmarks:
+                    print("[SUCCESS] Main détectée sans normalisation!")
+                    hand_landmarks = detection_result.hand_landmarks[0]
+                else:
+                    # Tentative 2: Augmenter le contraste
+                    print("[RETRY] Tentative avec augmentation du contraste...")
+                    enhanced = cv2.convertScaleAbs(image_rgb, alpha=1.5, beta=30)
+                    mp_image_enhanced = mp.Image(image_format=mp.ImageFormat.SRGB, data=enhanced)
+                    detection_result = detector.detect(mp_image_enhanced)
+                    
+                    if detection_result.hand_landmarks:
+                        print("[SUCCESS] Main détectée avec contraste augmenté!")
+                        hand_landmarks = detection_result.hand_landmarks[0]
+                        image_rgb = enhanced  # Utiliser l'image améliorée pour la suite
+            except Exception as e:
+                print(f"[ERROR] Retry failed: {e}")
             
-            purple_pixels = np.sum(mask > 0)
-            total_pixels = mask.size
-            purple_ratio = purple_pixels / total_pixels
-            
-            fraud_result = detect_fraud(image_rgb)
-            
-            # Si on trouve assez de violet/bleu, on considère qu'il y a de l'encre
-            ink_found = purple_ratio > 0.01  # 1% de l'image
-            
-            return {
-                'success': True,  # On retourne succès même sans main
-                'ink_detected': ink_found,
-                'voted': ink_found,
-                'verdict': 'PROBABLE' if ink_found else 'ABSENT',
-                'score_global': round(purple_ratio * 100, 2),
-                'n_doigts_detectes': 0,
-                'fraud': {
-                    'suspected': bool(fraud_result.get('suspected', False)),
-                    'score': int(fraud_result.get('score', 0)),
-                    'indicators': list(fraud_result.get('indicators', []))
-                },
-                'doigts': {
-                    'message': 'Main non détectée - analyse globale de l\'image'
+            # Si toujours pas de main détectée
+            if not detection_result.hand_landmarks:
+                fraud_result = detect_fraud(image_rgb)
+                return {
+                    'success': False,
+                    'error': 'NO_HAND_DETECTED',
+                    'message': 'Main non détectée. Montrez votre paume ouverte face à la caméra.',
+                    'ink_detected': False,
+                    'voted': False,
+                    'verdict': 'ERREUR',
+                    'score_global': 0.0,
+                    'n_doigts_detectes': 0,
+                    'fraud': {
+                        'suspected': bool(fraud_result.get('suspected', False)),
+                        'score': int(fraud_result.get('score', 0)),
+                        'indicators': list(fraud_result.get('indicators', []))
+                    },
+                    'doigts': {}
                 }
-            }
-        
-        hand_landmarks = detection_result.hand_landmarks[0]
+        else:
+            hand_landmarks = detection_result.hand_landmarks[0]
         
         palm_color = get_palm_color(image_rgb, hand_landmarks)
         
