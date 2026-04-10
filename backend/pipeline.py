@@ -291,7 +291,8 @@ def detect_fraud(image_rgb: np.ndarray) -> Dict:
 
 def run_pipeline(image_rgb: np.ndarray, sensitivity: float = 1.8) -> Dict:
     try:
-        image_rgb = normalize_light(image_rgb)
+        # Désactivé car ça perturbe MediaPipe
+        # image_rgb = normalize_light(image_rgb)
         
         model_path = download_model_if_needed()
         
@@ -311,29 +312,18 @@ def run_pipeline(image_rgb: np.ndarray, sensitivity: float = 1.8) -> Dict:
         detection_result = detector.detect(mp_image)
         
         if not detection_result.hand_landmarks:
-            print(f"[ERROR] Aucune main détectée. Image shape: {image_rgb.shape}")
-            # Essayons avec différents prétraitements
-            
-            # Tentative 1: Image originale sans normalisation
+            print(f"[WARNING] Première tentative échouée. Image shape: {image_rgb.shape}")
+            # Une seule tentative de retry avec plus de contraste
             try:
-                print("[RETRY] Tentative sans normalisation de lumière...")
-                mp_image_raw = mp.Image(image_format=mp.ImageFormat.SRGB, data=image_rgb)
-                detection_result = detector.detect(mp_image_raw)
+                print("[RETRY] Augmentation du contraste...")
+                enhanced = cv2.convertScaleAbs(image_rgb, alpha=1.8, beta=40)
+                mp_image_enhanced = mp.Image(image_format=mp.ImageFormat.SRGB, data=enhanced)
+                detection_result = detector.detect(mp_image_enhanced)
                 
                 if detection_result.hand_landmarks:
-                    print("[SUCCESS] Main détectée sans normalisation!")
+                    print("[SUCCESS] Main détectée après augmentation du contraste!")
                     hand_landmarks = detection_result.hand_landmarks[0]
-                else:
-                    # Tentative 2: Augmenter le contraste
-                    print("[RETRY] Tentative avec augmentation du contraste...")
-                    enhanced = cv2.convertScaleAbs(image_rgb, alpha=1.5, beta=30)
-                    mp_image_enhanced = mp.Image(image_format=mp.ImageFormat.SRGB, data=enhanced)
-                    detection_result = detector.detect(mp_image_enhanced)
-                    
-                    if detection_result.hand_landmarks:
-                        print("[SUCCESS] Main détectée avec contraste augmenté!")
-                        hand_landmarks = detection_result.hand_landmarks[0]
-                        image_rgb = enhanced  # Utiliser l'image améliorée pour la suite
+                    image_rgb = enhanced  # Utiliser l'image améliorée pour la suite
             except Exception as e:
                 print(f"[ERROR] Retry failed: {e}")
             

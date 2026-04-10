@@ -91,16 +91,15 @@ def preprocess_image(image: np.ndarray, target_size: int = 800) -> np.ndarray:
         image = cv2.resize(image, (new_w, new_h), interpolation=cv2.INTER_AREA)
         print(f"[PREPROCESS] Image réduite de {w}x{h} à {new_w}x{new_h}")
     
-    # 2. Amélioration LÉGÈRE du contraste (pas trop pour MediaPipe)
-    # Convertir en LAB pour ajuster la luminosité
+    # 2. Amélioration du contraste (comme dans le retry qui fonctionne)
+    # Augmenter le contraste et la luminosité
+    image = cv2.convertScaleAbs(image, alpha=1.3, beta=20)
+    
+    # Optionnel : CLAHE très léger en plus
     lab = cv2.cvtColor(image, cv2.COLOR_RGB2LAB)
     l_channel, a, b = cv2.split(lab)
-    
-    # CLAHE plus doux pour ne pas dénaturer l'image
-    clahe = cv2.createCLAHE(clipLimit=1.5, tileGridSize=(8, 8))
+    clahe = cv2.createCLAHE(clipLimit=1.2, tileGridSize=(8, 8))
     l_channel = clahe.apply(l_channel)
-    
-    # Reconvertir en RGB
     image = cv2.cvtColor(cv2.merge([l_channel, a, b]), cv2.COLOR_LAB2RGB)
     
     # 3. S'assurer que l'image est bien dans la plage [0, 255]
