@@ -36,8 +36,8 @@ ENV MESA_GL_VERSION_OVERRIDE=3.3
 ENV MESA_GLSL_VERSION_OVERRIDE=330
 ENV LIBGL_ALWAYS_SOFTWARE=1
 
-# Exposer le port
-EXPOSE 10000
+# Le port est défini par Render via la variable PORT
+EXPOSE ${PORT}
 
-# Commande de démarrage
-CMD ["uv", "run", "uvicorn", "main:app", "--host", "0.0.0.0", "--port", "10000"]
+# Commande de démarrage avec le port de Render
+CMD uv run uvicorn main:app --host 0.0.0.0 --port ${PORT:-10000}

@@ -289,27 +289,26 @@ def detect_fraud(image_rgb: np.ndarray) -> Dict:
     }
 
 
-def run_pipeline(image_rgb: np.ndarray, sensitivity: float = 1.8) -> Dict:
+def run_pipeline_mediapipe(image_rgb: np.ndarray, sensitivity: float = 1.8) -> Dict:
     try:
-        # Désactivé car ça perturbe MediaPipe
-        # image_rgb = normalize_light(image_rgb)
-        
-        model_path = download_model_if_needed()
-        
-        base_options = mp_python.BaseOptions(model_asset_path=model_path)
-        options = mp_vision.HandLandmarkerOptions(
-            base_options=base_options,
-            running_mode=mp_vision.RunningMode.IMAGE,
-            num_hands=2,
-            min_hand_detection_confidence=0.2,  # Réduit de 0.4 à 0.2
-            min_hand_presence_confidence=0.2,   # Réduit de 0.4 à 0.2
-            min_tracking_confidence=0.2         # Réduit de 0.4 à 0.2
-        )
-        
-        detector = mp_vision.HandLandmarker.create_from_options(options)
-        
-        mp_image = mp.Image(image_format=mp.ImageFormat.SRGB, data=image_rgb)
-        detection_result = detector.detect(mp_image)
+        # Tenter d'abord avec MediaPipe
+        try:
+            model_path = download_model_if_needed()
+            
+            base_options = mp_python.BaseOptions(model_asset_path=model_path)
+            options = mp_vision.HandLandmarkerOptions(
+                base_options=base_options,
+                running_mode=mp_vision.RunningMode.IMAGE,
+                num_hands=2,
+                min_hand_detection_confidence=0.2,  # Réduit de 0.4 à 0.2
+                min_hand_presence_confidence=0.2,   # Réduit de 0.4 à 0.2
+                min_tracking_confidence=0.2         # Réduit de 0.4 à 0.2
+            )
+            
+            detector = mp_vision.HandLandmarker.create_from_options(options)
+            
+            mp_image = mp.Image(image_format=mp.ImageFormat.SRGB, data=image_rgb)
+            detection_result = detector.detect(mp_image)
         
         if not detection_result.hand_landmarks:
             print(f"[WARNING] Première tentative échouée. Image shape: {image_rgb.shape}")
@@ -415,6 +414,14 @@ def run_pipeline(image_rgb: np.ndarray, sensitivity: float = 1.8) -> Dict:
             }
         }
         
+        except Exception as mediapipe_error:
+            # Si MediaPipe échoue (libGL error), utiliser le pipeline CPU
+            print(f"[WARNING] MediaPipe failed: {mediapipe_error}")
+            print("[INFO] Falling back to CPU-only pipeline")
+            
+            from pipeline_cpu import run_pipeline_cpu
+            return run_pipeline_cpu(image_rgb, sensitivity)
+            
     except Exception as e:
         return {
             'success': False,
