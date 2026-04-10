@@ -339,14 +339,17 @@ def run_pipeline_mediapipe(image_rgb: np.ndarray, sensitivity: float = 1.8) -> D
         try:
             model_path = download_model_if_needed()
             
-            base_options = mp_python.BaseOptions(model_asset_path=model_path)
+            base_options = mp_python.BaseOptions(
+                model_asset_path=model_path,
+                delegate=mp_python.BaseOptions.Delegate.CPU
+            )
             options = mp_vision.HandLandmarkerOptions(
                 base_options=base_options,
                 running_mode=mp_vision.RunningMode.IMAGE,
                 num_hands=2,
-                min_hand_detection_confidence=0.2,  # Réduit de 0.4 à 0.2
-                min_hand_presence_confidence=0.2,   # Réduit de 0.4 à 0.2
-                min_tracking_confidence=0.2         # Réduit de 0.4 à 0.2
+                min_hand_detection_confidence=0.4,
+                min_hand_presence_confidence=0.4,
+                min_tracking_confidence=0.4
             )
             
             detector = mp_vision.HandLandmarker.create_from_options(options)

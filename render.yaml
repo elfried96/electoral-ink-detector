@@ -9,11 +9,3 @@ services:
     envVars:
       - key: PYTHON_VERSION
         value: 3.12.0
-      - key: LIBGL_ALWAYS_SOFTWARE
-        value: "1"
-      - key: MESA_GL_VERSION_OVERRIDE
-        value: "3.3"
-      - key: MEDIAPIPE_DISABLE_GPU
-        value: "1"
-      - key: EGL_PLATFORM
-        value: surfaceless
