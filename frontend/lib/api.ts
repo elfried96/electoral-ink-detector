@@ -4,9 +4,9 @@ export interface AnalysisResult {
   success: boolean;
   ink_detected: boolean;
   voted: boolean;
-  verdict: "CERTAIN" | "PROBABLE" | "ABSENT" | "ERREUR";
+  verdict: "CERTAIN" | "ABSENT" | "ERREUR";
   score_global: number;
-  n_doigts_detectes: number;
+  doigt_encre: 'pouce' | 'index' | null;
   fraud: {
     suspected: boolean;
     score: number;

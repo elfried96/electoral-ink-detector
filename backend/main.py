@@ -203,7 +203,7 @@ async def analyze_image(
             "voted": result.get('voted', False),
             "verdict": result.get('verdict', 'ABSENT'),
             "score_global": result.get('score_global', 0),
-            "n_doigts_detectes": result.get('n_doigts_detectes', 0),
+            "doigt_encre": result.get('best_finger', None),  # quel doigt a l'encre
             "fraud": result.get('fraud', {
                 "suspected": False,
                 "score": 0,

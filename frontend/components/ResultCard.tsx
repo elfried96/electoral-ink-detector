@@ -24,24 +24,14 @@ export default function ResultCard({ result, onRetry }: ResultCardProps) {
     }
     
     if (result.voted && result.verdict === 'CERTAIN') {
+      const doigtText = result.doigt_encre === 'pouce' ? 'pouce' : 'index';
       return {
         type: 'voted_certain',
         bgColor: 'from-green-500 to-green-600',
         icon: <CheckCircle size={48} className="text-white" />,
         label: 'Vérification terminée',
         title: 'Cette personne a voté',
-        subtitle: "L'encre électorale est clairement visible.",
-      };
-    }
-    
-    if (result.voted && result.verdict === 'PROBABLE') {
-      return {
-        type: 'voted_probable',
-        bgColor: 'from-orange-500 to-orange-600',
-        icon: <AlertCircle size={48} className="text-white" />,
-        label: 'Vérification terminée',
-        title: 'Vote probable',
-        subtitle: 'Encre détectée sur un seul doigt. Vérifier manuellement si nécessaire.',
+        subtitle: `Encre détectée sur le ${doigtText}.`,
       };
     }
     
@@ -148,20 +138,23 @@ export default function ResultCard({ result, onRetry }: ResultCardProps) {
                 <div className="w-10 h-10 bg-blue-100 rounded-lg flex items-center justify-center">
                   <span className="text-lg">👍</span>
                 </div>
-                <span className="font-medium text-gray-700">Pouce</span>
+                <span className="font-medium text-gray-700">
+                  Pouce
+                  {result.doigt_encre === 'pouce' && (
+                    <span className="ml-2 text-green-600 text-sm">✓ Vote confirmé</span>
+                  )}
+                </span>
               </div>
               <div className="flex items-center gap-3">
                 <span className="text-gray-600 font-medium">
                   {Math.round(result.doigts?.pouce?.score_pct || 0)}%
                 </span>
                 <span className={`px-3 py-1 rounded-full text-sm font-semibold ${
-                  result.fraud?.suspected && result.doigts?.pouce?.ink_detected 
-                    ? 'bg-orange-100 text-orange-800'
-                    : result.doigts?.pouce?.ink_detected 
+                  result.doigts?.pouce?.ink_detected 
                     ? 'bg-green-100 text-green-800' 
                     : 'bg-gray-100 text-gray-600'
                 }`}>
-                  {result.doigts?.pouce?.ink_detected ? 'OUI' : 'NON'}
+                  {result.doigts?.pouce?.ink_detected ? 'ENCRE DÉTECTÉE' : 'Propre'}
                 </span>
               </div>
             </div>
@@ -172,20 +165,23 @@ export default function ResultCard({ result, onRetry }: ResultCardProps) {
                 <div className="w-10 h-10 bg-blue-100 rounded-lg flex items-center justify-center">
                   <span className="text-lg">👆</span>
                 </div>
-                <span className="font-medium text-gray-700">Index</span>
+                <span className="font-medium text-gray-700">
+                  Index
+                  {result.doigt_encre === 'index' && (
+                    <span className="ml-2 text-green-600 text-sm">✓ Vote confirmé</span>
+                  )}
+                </span>
               </div>
               <div className="flex items-center gap-3">
                 <span className="text-gray-600 font-medium">
                   {Math.round(result.doigts?.index?.score_pct || 0)}%
                 </span>
                 <span className={`px-3 py-1 rounded-full text-sm font-semibold ${
-                  result.fraud?.suspected && result.doigts?.index?.ink_detected 
-                    ? 'bg-orange-100 text-orange-800'
-                    : result.doigts?.index?.ink_detected 
+                  result.doigts?.index?.ink_detected 
                     ? 'bg-green-100 text-green-800' 
                     : 'bg-gray-100 text-gray-600'
                 }`}>
-                  {result.doigts?.index?.ink_detected ? 'OUI' : 'NON'}
+                  {result.doigts?.index?.ink_detected ? 'ENCRE DÉTECTÉE' : 'Propre'}
                 </span>
               </div>
             </div>
@@ -224,10 +220,12 @@ export default function ResultCard({ result, onRetry }: ResultCardProps) {
 
         {/* 6. MÉTA-INFORMATIONS */}
         <div className="flex gap-3 mb-6">
-          <span className="bg-gray-100 px-4 py-2 rounded-full text-sm text-gray-700">
-            <Fingerprint size={16} className="inline mr-1" />
-            Doigts détectés : {result.n_doigts_detectes}/2
-          </span>
+          {result.doigt_encre && (
+            <span className="bg-green-100 px-4 py-2 rounded-full text-sm text-green-700">
+              <Fingerprint size={16} className="inline mr-1" />
+              Encre sur : {result.doigt_encre === 'pouce' ? 'Pouce' : 'Index'}
+            </span>
+          )}
           <span className="bg-gray-100 px-4 py-2 rounded-full text-sm text-gray-700">
             <Clock size={16} className="inline mr-1" />
             {result.processing_time_ms}ms
