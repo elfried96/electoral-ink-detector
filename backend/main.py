@@ -144,7 +144,9 @@ async def analyze_image(
         start_time = time.time()
         
         contents = await file.read()
+        print(f"[INFO] Received image, size: {len(contents)} bytes")
         image = Image.open(io.BytesIO(contents))
+        print(f"[INFO] Image opened successfully: {image.size}, mode: {image.mode}")
         
         if image.mode != 'RGB':
             image = image.convert('RGB')
@@ -154,18 +156,20 @@ async def analyze_image(
         # Prétraiter l'image pour améliorer la qualité
         image_np = preprocess_image(image_np)
         
-        # Vérifier la qualité de l'image après prétraitement
-        quality_error = check_image_quality(image_np)
-        if quality_error:
-            return JSONResponse(
-                status_code=422,
-                content={
-                    'success': False,
-                    'error':   quality_error['error'],
-                    'message': quality_error['message'],
-                    'processing_time_ms': int((time.time() - start_time) * 1000)
-                }
-            )
+        # TEMPORAIREMENT DÉSACTIVÉ pour debug
+        # quality_error = check_image_quality(image_np)
+        # if quality_error:
+        #     print(f"[ERROR] Quality check failed: {quality_error}")
+        #     return JSONResponse(
+        #         status_code=422,
+        #         content={
+        #             'success': False,
+        #             'error':   quality_error['error'],
+        #             'message': quality_error['message'],
+        #             'processing_time_ms': int((time.time() - start_time) * 1000)
+        #         }
+        #     )
+        print(f"[INFO] Image shape after preprocessing: {image_np.shape}")
         
         result = run_pipeline(image_np, sensitivity=sensitivity)
         
