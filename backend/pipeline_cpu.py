@@ -138,17 +138,17 @@ def run_pipeline_cpu(image_rgb: np.ndarray, sensitivity: float = 1.8) -> Dict:
         
         return {
             'success': True,
-            'ink_detected': ink_result['ink_detected'],
-            'voted': voted,
+            'ink_detected': bool(ink_result['ink_detected']),
+            'voted': bool(voted),
             'verdict': verdict,
-            'score_global': ink_result['score'],
+            'score_global': float(ink_result['score']),
             'n_doigts_detectes': 1 if ink_result['ink_detected'] else 0,
             'fraud': {'suspected': False, 'score': 0, 'indicators': []},
             'doigts': {
                 'main': {
-                    'ink_detected': ink_result['ink_detected'],
-                    'score_pct': ink_result['score'],
-                    'confidence': ink_result['confidence']
+                    'ink_detected': bool(ink_result['ink_detected']),
+                    'score_pct': float(ink_result['score']),
+                    'confidence': float(ink_result['confidence'])
                 }
             },
             'method': 'cpu_simple'
