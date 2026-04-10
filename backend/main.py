@@ -68,13 +68,43 @@ app.add_middleware(
 )
 
 
-def resize_image_if_needed(image: np.ndarray, max_dimension: int = 1200) -> np.ndarray:
+def preprocess_image(image: np.ndarray, target_size: int = 800) -> np.ndarray:
+    """
+    Prétraite l'image pour garantir de bonnes conditions :
+    - Redimensionne si trop petite ou trop grande
+    - Améliore la netteté
+    - Ajuste le contraste
+    """
     h, w = image.shape[:2]
-    if max(h, w) > max_dimension:
-        scale = max_dimension / max(h, w)
+    
+    # 1. Redimensionnement intelligent
+    # Si trop petite, on agrandit
+    if min(h, w) < 600:
+        scale = 600 / min(h, w)
         new_w = int(w * scale)
         new_h = int(h * scale)
-        return cv2.resize(image, (new_w, new_h), interpolation=cv2.INTER_AREA)
+        image = cv2.resize(image, (new_w, new_h), interpolation=cv2.INTER_CUBIC)
+        print(f"[PREPROCESS] Image agrandie de {w}x{h} à {new_w}x{new_h}")
+    
+    # Si trop grande, on réduit
+    elif max(h, w) > 1200:
+        scale = 1200 / max(h, w)
+        new_w = int(w * scale)
+        new_h = int(h * scale)
+        image = cv2.resize(image, (new_w, new_h), interpolation=cv2.INTER_AREA)
+        print(f"[PREPROCESS] Image réduite de {w}x{h} à {new_w}x{new_h}")
+    
+    # 2. Amélioration de la netteté (unsharp mask)
+    gaussian = cv2.GaussianBlur(image, (0, 0), 2.0)
+    image = cv2.addWeighted(image, 1.5, gaussian, -0.5, 0)
+    
+    # 3. Amélioration du contraste avec CLAHE
+    lab = cv2.cvtColor(image, cv2.COLOR_RGB2LAB)
+    l_channel, a, b = cv2.split(lab)
+    clahe = cv2.createCLAHE(clipLimit=2.0, tileGridSize=(8, 8))
+    l_channel = clahe.apply(l_channel)
+    image = cv2.cvtColor(cv2.merge([l_channel, a, b]), cv2.COLOR_LAB2RGB)
+    
     return image
 
 
@@ -121,9 +151,10 @@ async def analyze_image(
         
         image_np = np.array(image)
         
-        image_np = resize_image_if_needed(image_np, max_dimension=1200)
+        # Prétraiter l'image pour améliorer la qualité
+        image_np = preprocess_image(image_np)
         
-        # Vérifier la qualité de l'image avant l'analyse
+        # Vérifier la qualité de l'image après prétraitement
         quality_error = check_image_quality(image_np)
         if quality_error:
             return JSONResponse(
