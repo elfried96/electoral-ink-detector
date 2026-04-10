@@ -7,6 +7,12 @@ export interface AnalysisResult {
   verdict: "CERTAIN" | "ABSENT" | "ERREUR";
   score_global: number;
   doigt_encre: 'pouce' | 'index' | null;
+  preprocessing?: {
+    corrections_appliquees: string[];
+    taille_originale: string;
+    taille_finale: string;
+    n_corrections: number;
+  };
   fraud: {
     suspected: boolean;
     score: number;

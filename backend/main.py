@@ -13,7 +13,7 @@ import time
 from typing import Dict, Any
 import os
 
-from pipeline import run_pipeline_mediapipe as run_pipeline, download_model_if_needed, check_image_quality
+from pipeline import run_pipeline_mediapipe as run_pipeline, download_model_if_needed
 
 # Configuration du rate limiting
 limiter = Limiter(key_func=get_remote_address)
@@ -68,45 +68,6 @@ app.add_middleware(
 )
 
 
-def preprocess_image(image: np.ndarray, target_size: int = 800) -> np.ndarray:
-    """
-    Prétraite l'image pour améliorer la détection MediaPipe :
-    - Redimensionne à une taille optimale
-    - Améliore modérément le contraste
-    - Garde les couleurs naturelles pour MediaPipe
-    """
-    h, w = image.shape[:2]
-    
-    # 1. Redimensionnement optimal pour MediaPipe (entre 640 et 1280)
-    if min(h, w) < 640:
-        scale = 640 / min(h, w)
-        new_w = int(w * scale)
-        new_h = int(h * scale)
-        image = cv2.resize(image, (new_w, new_h), interpolation=cv2.INTER_LINEAR)
-        print(f"[PREPROCESS] Image agrandie de {w}x{h} à {new_w}x{new_h}")
-    elif max(h, w) > 1280:
-        scale = 1280 / max(h, w)
-        new_w = int(w * scale)
-        new_h = int(h * scale)
-        image = cv2.resize(image, (new_w, new_h), interpolation=cv2.INTER_AREA)
-        print(f"[PREPROCESS] Image réduite de {w}x{h} à {new_w}x{new_h}")
-    
-    # 2. Amélioration du contraste (comme dans le retry qui fonctionne)
-    # Augmenter le contraste et la luminosité
-    image = cv2.convertScaleAbs(image, alpha=1.3, beta=20)
-    
-    # Optionnel : CLAHE très léger en plus
-    lab = cv2.cvtColor(image, cv2.COLOR_RGB2LAB)
-    l_channel, a, b = cv2.split(lab)
-    clahe = cv2.createCLAHE(clipLimit=1.2, tileGridSize=(8, 8))
-    l_channel = clahe.apply(l_channel)
-    image = cv2.cvtColor(cv2.merge([l_channel, a, b]), cv2.COLOR_LAB2RGB)
-    
-    # 3. S'assurer que l'image est bien dans la plage [0, 255]
-    image = np.clip(image, 0, 255).astype(np.uint8)
-    
-    return image
-
 
 @app.get("/")
 async def root():
@@ -152,24 +113,21 @@ async def analyze_image(
             image = image.convert('RGB')
         
         image_np = np.array(image)
+        h, w = image_np.shape[:2]
         
-        # Prétraiter l'image pour améliorer la qualité
-        image_np = preprocess_image(image_np)
+        # Vérification minimale : image trop petite pour être analysée
+        if h < 100 or w < 100:
+            return JSONResponse(
+                status_code=422,
+                content={
+                    'success': False,
+                    'error': 'IMAGE_TOO_SMALL',
+                    'message': f'Image vraiment trop petite ({w}x{h}). Minimum requis: 100x100',
+                    'processing_time_ms': int((time.time() - start_time) * 1000)
+                }
+            )
         
-        # TEMPORAIREMENT DÉSACTIVÉ pour debug
-        # quality_error = check_image_quality(image_np)
-        # if quality_error:
-        #     print(f"[ERROR] Quality check failed: {quality_error}")
-        #     return JSONResponse(
-        #         status_code=422,
-        #         content={
-        #             'success': False,
-        #             'error':   quality_error['error'],
-        #             'message': quality_error['message'],
-        #             'processing_time_ms': int((time.time() - start_time) * 1000)
-        #         }
-        #     )
-        print(f"[INFO] Image shape after preprocessing: {image_np.shape}")
+        print(f"[INFO] Image shape: {image_np.shape}")
         
         result = run_pipeline(image_np, sensitivity=sensitivity)
         print(f"[INFO] Pipeline result: success={result.get('success')}, error={result.get('error')}")
@@ -212,6 +170,10 @@ async def analyze_image(
             "doigts": result.get('doigts', {}),
             "processing_time_ms": processing_time_ms
         }
+        
+        # Ajouter le rapport de prétraitement s'il existe
+        if 'preprocessing' in result:
+            response['preprocessing'] = result['preprocessing']
         
         if 'palm_color' in result:
             response['palm_color'] = result['palm_color']

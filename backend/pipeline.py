@@ -28,49 +28,94 @@ def normalize_light(image_rgb: np.ndarray) -> np.ndarray:
     return cv2.cvtColor(lab, cv2.COLOR_LAB2RGB)
 
 
-def check_image_quality(image_rgb: np.ndarray) -> Optional[Dict]:
+def preprocess_image(image_rgb: np.ndarray) -> tuple[np.ndarray, Dict]:
     """
-    Vérifie la qualité de l'image AVANT l'analyse.
-    Retourne None si OK, ou un dict d'erreur sinon.
+    Prétraitement automatique de l'image AVANT l'analyse.
+    Corrige tous les problèmes courants sans rejeter l'image.
+    Retourne : (image_corrigee, rapport_corrections)
     """
-    h, w = image_rgb.shape[:2]
-    
-    # Taille minimum
-    if w < 400 or h < 400:
-        return {
-            'error': 'IMAGE_TOO_SMALL',
-            'message': 'Photo trop petite. Approchez-vous de la caméra.'
-        }
-    
-    # Netteté (variance du Laplacian)
-    gray = cv2.cvtColor(image_rgb, cv2.COLOR_RGB2GRAY)
+    corrections = []
+    img = image_rgb.copy()
+    h, w = img.shape[:2]
+
+    # ── 1. REDIMENSIONNEMENT ──────────────────────────────────
+    # Trop petite → agrandir (minimum 640px sur le grand côté)
+    # Trop grande → réduire  (maximum 1200px sur le grand côté)
+    MIN_SIZE = 640
+    MAX_SIZE = 1200
+    grand_cote = max(h, w)
+
+    if grand_cote < MIN_SIZE:
+        scale = MIN_SIZE / grand_cote
+        new_w = int(w * scale)
+        new_h = int(h * scale)
+        img = cv2.resize(img, (new_w, new_h), interpolation=cv2.INTER_CUBIC)
+        corrections.append(f"Agrandie {w}x{h} → {new_w}x{new_h}")
+
+    elif grand_cote > MAX_SIZE:
+        scale = MAX_SIZE / grand_cote
+        new_w = int(w * scale)
+        new_h = int(h * scale)
+        img = cv2.resize(img, (new_w, new_h), interpolation=cv2.INTER_AREA)
+        corrections.append(f"Réduite {w}x{h} → {new_w}x{new_h}")
+
+    # ── 2. CORRECTION LUMINOSITÉ ─────────────────────────────
+    # CLAHE sur canal L (LAB) — corrige sous/surexposition
+    lab = cv2.cvtColor(img, cv2.COLOR_RGB2LAB)
+    l, a, b = cv2.split(lab)
+    brightness = float(l.mean())
+
+    if brightness < 80 or brightness > 210:
+        clahe = cv2.createCLAHE(clipLimit=3.0, tileGridSize=(8, 8))
+        l = clahe.apply(l)
+        img = cv2.cvtColor(cv2.merge([l, a, b]), cv2.COLOR_LAB2RGB)
+        if brightness < 80:
+            corrections.append(f"Luminosité corrigée (trop sombre: {brightness:.0f})")
+        else:
+            corrections.append(f"Luminosité corrigée (surexposée: {brightness:.0f})")
+    else:
+        # Appliquer CLAHE léger même si luminosité OK
+        # pour uniformiser les conditions d'analyse
+        clahe = cv2.createCLAHE(clipLimit=2.0, tileGridSize=(8, 8))
+        l = clahe.apply(l)
+        img = cv2.cvtColor(cv2.merge([l, a, b]), cv2.COLOR_LAB2RGB)
+
+    # ── 3. CORRECTION FLOU ───────────────────────────────────
+    # Si image floue → appliquer un filtre de netteté (unsharp mask)
+    gray = cv2.cvtColor(img, cv2.COLOR_RGB2GRAY)
     sharpness = float(cv2.Laplacian(gray, cv2.CV_64F).var())
-    print(f"[DEBUG] Sharpness: {sharpness}")
-    # Seuil TRÈS bas - on accepte presque tout après prétraitement  
-    if sharpness < 10:  # Seuil TRÈS bas (était 30, puis 80)
-        return {
-            'error': 'IMAGE_BLURRY',
-            'message': f'Image vraiment trop floue (score: {sharpness:.1f}).'
-        }
-    
-    # Luminosité (canal V)
-    hsv = cv2.cvtColor(
-        cv2.cvtColor(image_rgb, cv2.COLOR_RGB2BGR),
-        cv2.COLOR_BGR2HSV
-    )
-    brightness = float(hsv[:,:,2].mean())
-    if brightness < 60:
-        return {
-            'error': 'BAD_LIGHTING',
-            'message': 'Image trop sombre. Allez vers une fenêtre ou activez le flash.'
-        }
-    if brightness > 230:
-        return {
-            'error': 'BAD_LIGHTING',
-            'message': 'Image surexposée. Évitez le flash direct.'
-        }
-    
-    return None  # OK
+
+    if sharpness < 100:
+        # Unsharp mask : accentue les contours sans dégrader
+        gaussian = cv2.GaussianBlur(img, (0, 0), 3.0)
+        img = cv2.addWeighted(img, 1.5, gaussian, -0.5, 0)
+        img = np.clip(img, 0, 255).astype(np.uint8)
+        corrections.append(f"Netteté améliorée (score: {sharpness:.0f})")
+
+    # ── 4. CORRECTION ROTATION ───────────────────────────────
+    # Détecter si l'image est en portrait ou paysage
+    # Si paysage (largeur > hauteur) → rotation 90° pour avoir
+    # la main en portrait (plus facile pour MediaPipe)
+    h2, w2 = img.shape[:2]
+    if w2 > h2 * 1.2:
+        img = cv2.rotate(img, cv2.ROTATE_90_CLOCKWISE)
+        corrections.append(f"Rotation 90° (paysage → portrait)")
+
+    # ── 5. RÉDUCTION BRUIT ───────────────────────────────────
+    # Filtre bilatéral : réduit le bruit en préservant les bords
+    # Important pour les photos prises en mouvement
+    img = cv2.bilateralFilter(img, d=5, sigmaColor=35, sigmaSpace=35)
+
+    # ── 6. RAPPORT FINAL ─────────────────────────────────────
+    h_final, w_final = img.shape[:2]
+    rapport = {
+        'corrections_appliquees': corrections,
+        'taille_originale': f"{w}x{h}",
+        'taille_finale': f"{w_final}x{h_final}",
+        'n_corrections': len(corrections)
+    }
+
+    return img, rapport
 
 
 def get_palm_color(image_rgb: np.ndarray, hand_landmarks: List) -> Dict:
@@ -286,7 +331,11 @@ def detect_fraud(image_rgb: np.ndarray) -> Dict:
 
 def run_pipeline_mediapipe(image_rgb: np.ndarray, sensitivity: float = 1.8) -> Dict:
     try:
-        # Tenter d'abord avec MediaPipe
+        # Étape 1 : prétraitement automatique
+        image_preprocessed, rapport = preprocess_image(image_rgb)
+        print(f"[PREPROCESS] {rapport['n_corrections']} corrections appliquées")
+        
+        # Étape 2 : détection main sur image corrigée
         try:
             model_path = download_model_if_needed()
             
@@ -302,35 +351,36 @@ def run_pipeline_mediapipe(image_rgb: np.ndarray, sensitivity: float = 1.8) -> D
             
             detector = mp_vision.HandLandmarker.create_from_options(options)
             
-            mp_image = mp.Image(image_format=mp.ImageFormat.SRGB, data=image_rgb)
+            mp_image = mp.Image(image_format=mp.ImageFormat.SRGB, data=image_preprocessed)
             detection_result = detector.detect(mp_image)
         except Exception as e:
             print(f"[ERROR] MediaPipe initialization failed: {e}")
             raise
         
         if not detection_result.hand_landmarks:
-            print(f"[WARNING] Première tentative échouée. Image shape: {image_rgb.shape}")
+            print(f"[WARNING] Première tentative échouée. Image shape: {image_preprocessed.shape}")
             # Une seule tentative de retry avec plus de contraste
             try:
                 print("[RETRY] Augmentation du contraste...")
-                enhanced = cv2.convertScaleAbs(image_rgb, alpha=1.8, beta=40)
+                enhanced = cv2.convertScaleAbs(image_preprocessed, alpha=1.8, beta=40)
                 mp_image_enhanced = mp.Image(image_format=mp.ImageFormat.SRGB, data=enhanced)
                 detection_result = detector.detect(mp_image_enhanced)
                 
                 if detection_result.hand_landmarks:
                     print("[SUCCESS] Main détectée après augmentation du contraste!")
                     hand_landmarks = detection_result.hand_landmarks[0]
-                    image_rgb = enhanced  # Utiliser l'image améliorée pour la suite
+                    image_preprocessed = enhanced  # Utiliser l'image améliorée pour la suite
             except Exception as e:
                 print(f"[ERROR] Retry failed: {e}")
             
             # Si toujours pas de main détectée
             if not detection_result.hand_landmarks:
-                fraud_result = detect_fraud(image_rgb)
+                fraud_result = detect_fraud(image_preprocessed)
                 return {
                     'success': False,
                     'error': 'NO_HAND_DETECTED',
                     'message': 'Main non détectée. Montrez votre paume ouverte face à la caméra.',
+                    'preprocessing': rapport,
                     'ink_detected': False,
                     'voted': False,
                     'verdict': 'ERREUR',
@@ -346,13 +396,14 @@ def run_pipeline_mediapipe(image_rgb: np.ndarray, sensitivity: float = 1.8) -> D
         else:
             hand_landmarks = detection_result.hand_landmarks[0]
         
-        palm_color = get_palm_color(image_rgb, hand_landmarks)
+        palm_color = get_palm_color(image_preprocessed, hand_landmarks)
         
         if palm_color is None:
-            fraud_result = detect_fraud(image_rgb)
+            fraud_result = detect_fraud(image_preprocessed)
             return {
                 'success': False,
                 'error': 'Impossible d\'extraire la couleur de la paume',
+                'preprocessing': rapport,
                 'ink_detected': False,
                 'voted': False,
                 'verdict': 'ERREUR',
@@ -369,7 +420,7 @@ def run_pipeline_mediapipe(image_rgb: np.ndarray, sensitivity: float = 1.8) -> D
         finger_results = {}
         
         for finger_name in ['pouce', 'index']:
-            finger_region, bbox = crop_finger(image_rgb, hand_landmarks, finger_name)
+            finger_region, bbox = crop_finger(image_preprocessed, hand_landmarks, finger_name)
             if finger_region is not None:
                 finger_results[finger_name] = analyze_ink_adaptive(
                     finger_region, palm_color, sensitivity
@@ -383,7 +434,7 @@ def run_pipeline_mediapipe(image_rgb: np.ndarray, sensitivity: float = 1.8) -> D
                 }
         
         final_score = score_final(finger_results)
-        fraud_result = detect_fraud(image_rgb)
+        fraud_result = detect_fraud(image_preprocessed)
         
         return {
             'success': True,
@@ -409,7 +460,8 @@ def run_pipeline_mediapipe(image_rgb: np.ndarray, sensitivity: float = 1.8) -> D
                 'h': float(palm_color['h']),
                 's': float(palm_color['s']),
                 'v': float(palm_color['v'])
-            }
+            },
+            'preprocessing': rapport  # Ajouter le rapport de prétraitement
         }
             
     except Exception as e:
