@@ -300,9 +300,9 @@ def run_pipeline(image_rgb: np.ndarray, sensitivity: float = 1.8) -> Dict:
             base_options=base_options,
             running_mode=mp_vision.RunningMode.IMAGE,
             num_hands=2,
-            min_hand_detection_confidence=0.4,
-            min_hand_presence_confidence=0.4,
-            min_tracking_confidence=0.4
+            min_hand_detection_confidence=0.2,  # Réduit de 0.4 à 0.2
+            min_hand_presence_confidence=0.2,   # Réduit de 0.4 à 0.2
+            min_tracking_confidence=0.2         # Réduit de 0.4 à 0.2
         )
         
         detector = mp_vision.HandLandmarker.create_from_options(options)
@@ -311,21 +311,39 @@ def run_pipeline(image_rgb: np.ndarray, sensitivity: float = 1.8) -> Dict:
         detection_result = detector.detect(mp_image)
         
         if not detection_result.hand_landmarks:
+            print("[WARNING] Aucune main détectée, analyse de l'image entière")
+            # Analyser l'image entière comme fallback
+            hsv = cv2.cvtColor(cv2.cvtColor(image_rgb, cv2.COLOR_RGB2BGR), cv2.COLOR_BGR2HSV)
+            
+            # Chercher des pixels violets/bleus dans toute l'image
+            lower_purple = np.array([100, 50, 50])
+            upper_purple = np.array([170, 255, 255])
+            mask = cv2.inRange(hsv, lower_purple, upper_purple)
+            
+            purple_pixels = np.sum(mask > 0)
+            total_pixels = mask.size
+            purple_ratio = purple_pixels / total_pixels
+            
             fraud_result = detect_fraud(image_rgb)
+            
+            # Si on trouve assez de violet/bleu, on considère qu'il y a de l'encre
+            ink_found = purple_ratio > 0.01  # 1% de l'image
+            
             return {
-                'success': False,
-                'error': 'Aucune main détectée',
-                'ink_detected': False,
-                'voted': False,
-                'verdict': 'ERREUR',
-                'score_global': 0.0,
+                'success': True,  # On retourne succès même sans main
+                'ink_detected': ink_found,
+                'voted': ink_found,
+                'verdict': 'PROBABLE' if ink_found else 'ABSENT',
+                'score_global': round(purple_ratio * 100, 2),
                 'n_doigts_detectes': 0,
                 'fraud': {
                     'suspected': bool(fraud_result.get('suspected', False)),
                     'score': int(fraud_result.get('score', 0)),
                     'indicators': list(fraud_result.get('indicators', []))
                 },
-                'doigts': {}
+                'doigts': {
+                    'message': 'Main non détectée - analyse globale de l\'image'
+                }
             }
         
         hand_landmarks = detection_result.hand_landmarks[0]

@@ -172,6 +172,7 @@ async def analyze_image(
         print(f"[INFO] Image shape after preprocessing: {image_np.shape}")
         
         result = run_pipeline(image_np, sensitivity=sensitivity)
+        print(f"[INFO] Pipeline result: success={result.get('success')}, error={result.get('error')}")
         
         processing_time_ms = int((time.time() - start_time) * 1000)
         

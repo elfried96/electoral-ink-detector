@@ -86,7 +86,6 @@ export default function SimpleUpload({ onCapture, className = "" }: SimpleUpload
         accept="image/*"
         onChange={handleFileChange}
         className="hidden"
-        capture="environment"
       />
       <div className="flex items-center justify-between">
         <div className="flex items-center gap-4">
