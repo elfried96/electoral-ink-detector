@@ -24,7 +24,11 @@ export default function CameraCapture({ onCapture, onClose }: CameraCaptureProps
       
       // Vérifier d'abord si l'API est disponible
       if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
-        throw new Error('Camera API not available');
+        // Vérifier si on est en HTTP non sécurisé
+        if (location.protocol === 'http:' && location.hostname !== 'localhost') {
+          throw new Error('HTTPS requis pour accéder à la caméra. Utilisez le bouton Importer.');
+        }
+        throw new Error('API caméra non disponible. Utilisez le bouton Importer pour choisir une photo.');
       }
       
       // Essayer d'abord avec facingMode environment (caméra arrière)

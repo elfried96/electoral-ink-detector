@@ -1,11 +1,10 @@
 services:
   - type: web
     name: ink-detection-api
-    env: python
+    env: docker
     region: frankfurt
     plan: free
-    buildCommand: pip install uv && uv sync
-    startCommand: bash startup.sh
+    dockerfilePath: ./Dockerfile
     envVars:
-      - key: PYTHON_VERSION
-        value: 3.12.0
+      - key: PORT
+        value: 10000
