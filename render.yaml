@@ -1,0 +1,10 @@
+services:
+  - type: web
+    name: ink-detection-api
+    runtime: docker
+    dockerfilePath: ./backend/Dockerfile
+    dockerContext: ./backend
+    envVars:
+      - key: PORT
+        value: 10000
+    healthCheckPath: /health

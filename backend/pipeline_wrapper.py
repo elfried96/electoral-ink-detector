@@ -23,13 +23,18 @@ def run_pipeline(image_rgb: np.ndarray, sensitivity: float = 1.8) -> Dict:
         if 'libGL' in error_msg or 'libEGL' in error_msg or 'cannot open shared object' in error_msg:
             print("[INFO] OpenGL error detected, switching to CPU-only pipeline")
     
-    # Fallback sur CPU pipeline
+    # Fallback sur pipeline avancé sans MediaPipe
     try:
+        from pipeline_yolo import run_pipeline_yolo
+        print("[INFO] Using advanced CV pipeline (no MediaPipe)")
+        return run_pipeline_yolo(image_rgb, sensitivity)
+    except ImportError:
+        # Si scipy/skimage ne sont pas installés, utiliser le pipeline CPU simple
         from pipeline_cpu import run_pipeline_cpu
-        print("[INFO] Using CPU-only pipeline (no MediaPipe)")
+        print("[INFO] Using simple CPU pipeline (no MediaPipe)")
         return run_pipeline_cpu(image_rgb, sensitivity)
     except Exception as e:
-        print(f"[ERROR] CPU pipeline also failed: {e}")
+        print(f"[ERROR] All pipelines failed: {e}")
         return {
             'success': False,
             'error': str(e),

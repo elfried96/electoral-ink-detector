@@ -17,12 +17,19 @@ def detect_hand_simple(image_rgb: np.ndarray) -> Optional[Dict]:
     # Convertir en HSV pour détecter la couleur de peau
     hsv = cv2.cvtColor(image_rgb, cv2.COLOR_RGB2HSV)
     
-    # Plage pour la détection de peau (ajustée pour différents tons)
-    lower_skin = np.array([0, 20, 70], dtype=np.uint8)
-    upper_skin = np.array([20, 255, 255], dtype=np.uint8)
+    # Plages multiples pour différents tons de peau
+    # Tons clairs
+    lower_skin1 = np.array([0, 10, 60], dtype=np.uint8)
+    upper_skin1 = np.array([25, 150, 255], dtype=np.uint8)
     
-    # Masque de peau
-    skin_mask = cv2.inRange(hsv, lower_skin, upper_skin)
+    # Tons moyens/foncés
+    lower_skin2 = np.array([0, 30, 30], dtype=np.uint8)
+    upper_skin2 = np.array([35, 255, 255], dtype=np.uint8)
+    
+    # Créer les masques
+    skin_mask1 = cv2.inRange(hsv, lower_skin1, upper_skin1)
+    skin_mask2 = cv2.inRange(hsv, lower_skin2, upper_skin2)
+    skin_mask = cv2.bitwise_or(skin_mask1, skin_mask2)
     
     # Nettoyer le masque
     kernel = cv2.getStructuringElement(cv2.MORPH_ELLIPSE, (11, 11))
@@ -40,7 +47,7 @@ def detect_hand_simple(image_rgb: np.ndarray) -> Optional[Dict]:
     area = cv2.contourArea(largest_contour)
     
     # Vérifier que le contour est assez grand
-    if area < (w * h * 0.1):  # Au moins 10% de l'image
+    if area < (w * h * 0.05):  # Au moins 5% de l'image (plus flexible)
         return None
     
     # Obtenir la boîte englobante
@@ -60,13 +67,14 @@ def analyze_ink_simple(image_rgb: np.ndarray) -> Dict:
     # Convertir en HSV
     hsv = cv2.cvtColor(image_rgb, cv2.COLOR_RGB2HSV)
     
-    # Détecter les couleurs violettes/bleues (encre)
-    # Plage étendue pour couvrir bleu et violet
-    lower_ink1 = np.array([100, 50, 50])  # Bleu
-    upper_ink1 = np.array([130, 255, 255])
+    # Détecter les couleurs violettes/bleues (encre) - Plages plus strictes
+    # Bleu-violet (encre électorale typique)
+    lower_ink1 = np.array([85, 60, 30])  # Bleu avec saturation minimale
+    upper_ink1 = np.array([130, 255, 200])
     
-    lower_ink2 = np.array([130, 50, 50])  # Violet
-    upper_ink2 = np.array([170, 255, 255])
+    # Violet profond
+    lower_ink2 = np.array([130, 60, 30])  # Violet avec saturation minimale
+    upper_ink2 = np.array([170, 255, 200])
     
     # Créer les masques
     mask1 = cv2.inRange(hsv, lower_ink1, upper_ink1)
@@ -83,13 +91,13 @@ def analyze_ink_simple(image_rgb: np.ndarray) -> Dict:
     ink_pixels = np.sum(ink_mask > 0)
     ink_ratio = ink_pixels / total_pixels
     
-    # Déterminer si encre détectée
-    ink_detected = ink_ratio > 0.005  # 0.5% minimum
+    # Déterminer si encre détectée (seuil plus strict)
+    ink_detected = ink_ratio > 0.001  # 0.1% minimum pour le CPU simple
     
     return {
         'ink_detected': ink_detected,
         'score': round(ink_ratio * 100, 2),
-        'confidence': min(ink_ratio / 0.005, 1.0) if ink_detected else 0,
+        'confidence': min(ink_ratio / 0.001, 1.0) if ink_detected else 0,
         'mask': ink_mask
     }
 

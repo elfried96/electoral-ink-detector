@@ -1,13 +1,33 @@
-FROM python:3.12-slim
+FROM python:3.12
 
-# Installer les dépendances système nécessaires pour MediaPipe
+# Installer toutes les dépendances système nécessaires pour MediaPipe et OpenGL
 RUN apt-get update && apt-get install -y \
+    # OpenGL et Mesa
     libgl1-mesa-glx \
+    libgl1-mesa-dri \
+    libglu1-mesa \
+    libgles2 \
+    libegl1-mesa \
+    mesa-utils \
+    # X11 et rendu
+    libx11-6 \
+    libxext6 \
+    libxrender1 \
+    libxrandr2 \
+    libxi6 \
+    libxinerama1 \
+    libxcursor1 \
+    libxcomposite1 \
+    libxdamage1 \
+    libxfixes3 \
+    libxtst6 \
+    xvfb \
+    # Autres dépendances
     libglib2.0-0 \
     libsm6 \
-    libxext6 \
-    libxrender-dev \
     libgomp1 \
+    libgdk-pixbuf2.0-0 \
+    libgtk-3-0 \
     wget \
     curl \
     && rm -rf /var/lib/apt/lists/*
@@ -31,13 +51,22 @@ COPY . .
 RUN wget -q https://storage.googleapis.com/mediapipe-models/hand_landmarker/hand_landmarker/float16/1/hand_landmarker.task \
     || curl -sL https://storage.googleapis.com/mediapipe-models/hand_landmarker/hand_landmarker/float16/1/hand_landmarker.task -o hand_landmarker.task
 
-# Variables d'environnement pour le rendu software OpenGL
+# Variables d'environnement pour forcer le rendu software OpenGL
+ENV LIBGL_ALWAYS_SOFTWARE=1
 ENV MESA_GL_VERSION_OVERRIDE=3.3
 ENV MESA_GLSL_VERSION_OVERRIDE=330
-ENV LIBGL_ALWAYS_SOFTWARE=1
+ENV QT_X11_NO_MITSHM=1
+ENV DISPLAY=:99
+
+# Créer un script de démarrage avec Xvfb
+RUN echo '#!/bin/bash\n\
+Xvfb :99 -screen 0 1024x768x24 -nolisten tcp -nolisten unix &\n\
+sleep 2\n\
+uv run uvicorn main:app --host 0.0.0.0 --port ${PORT:-10000}' > /app/start.sh && \
+chmod +x /app/start.sh
 
 # Le port est défini par Render via la variable PORT
 EXPOSE ${PORT}
 
-# Commande de démarrage avec le port de Render
-CMD uv run uvicorn main:app --host 0.0.0.0 --port ${PORT:-10000}
+# Utiliser le script de démarrage
+CMD ["/app/start.sh"]
