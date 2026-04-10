@@ -7,8 +7,11 @@ URL="https://storage.googleapis.com/mediapipe-models/hand_landmarker/hand_landma
 if [ ! -f "$MODEL" ]; then
   echo "Downloading $MODEL..."
   wget -q "$URL" -O "$MODEL" || curl -sL "$URL" -o "$MODEL"
-  echo "Model downloaded."
+  echo "Downloaded."
 fi
 
 echo "Starting server..."
-uv run uvicorn main:app --host 0.0.0.0 --port ${PORT:-10000}
+uv run uvicorn main:app \
+  --host 0.0.0.0 \
+  --port ${PORT:-10000} \
+  --workers 1

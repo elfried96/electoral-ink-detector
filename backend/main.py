@@ -13,35 +13,15 @@ import time
 from typing import Dict, Any
 import os
 
-from pipeline import run_pipeline_mediapipe as run_pipeline, download_model_if_needed, preprocess_image
+from pipeline import run_pipeline_mediapipe as run_pipeline, preprocess_image
 
 # Configuration du rate limiting
 limiter = Limiter(key_func=get_remote_address)
 
-
-model_loaded = False
-
-
-@asynccontextmanager
-async def lifespan(app: FastAPI):
-    global model_loaded
-    try:
-        print("Loading hand detection model...")
-        download_model_if_needed()
-        model_loaded = True
-        print("Model loaded successfully!")
-    except Exception as e:
-        print(f"Error loading model: {e}")
-        model_loaded = False
-    yield
-    print("Shutting down...")
-
-
 app = FastAPI(
     title="Ink Detection API",
     description="API pour la détection d'encre électorale sur les doigts",
-    version="1.0.0",
-    lifespan=lifespan
+    version="1.0.0"
 )
 
 # Ajouter le handler pour rate limit personnalisé
@@ -76,9 +56,11 @@ async def root():
 
 @app.get("/health")
 async def health_check():
+    from pipeline import HAND_LANDMARKER
     return {
         "status": "ok",
-        "model_loaded": model_loaded
+        "model_loaded": HAND_LANDMARKER is not None,
+        "delegate": "CPU"
     }
 
 

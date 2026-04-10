@@ -1,20 +1,47 @@
+import os
 import cv2
 import numpy as np
 import mediapipe as mp
 from mediapipe.tasks import python as mp_python
 from mediapipe.tasks.python import vision as mp_vision
 from typing import Dict, List, Tuple, Optional, Any
-import os
 import urllib.request
+
+MODEL_PATH = os.path.join(os.path.dirname(__file__), "hand_landmarker.task")
+
+# ── Initialisation globale au chargement du module ──────────
+# Delegate.CPU = jamais de GPU, jamais d'OpenGL, aucune
+# dépendance graphique. Fonctionne sur tout serveur headless.
+print("[INIT] Chargement HandLandmarker en mode CPU...")
+
+# Télécharger le modèle si nécessaire
+if not os.path.exists(MODEL_PATH):
+    print(f"[INIT] Téléchargement du modèle...")
+    url = "https://storage.googleapis.com/mediapipe-models/hand_landmarker/hand_landmarker/float16/1/hand_landmarker.task"
+    urllib.request.urlretrieve(url, MODEL_PATH)
+    print(f"[INIT] Modèle téléchargé : {MODEL_PATH}")
+
+base_options = mp_python.BaseOptions(
+    model_asset_path=MODEL_PATH,
+    delegate=mp_python.BaseOptions.Delegate.CPU   # ← CLEF DU FIX
+)
+
+hand_options = mp_vision.HandLandmarkerOptions(
+    base_options=base_options,
+    running_mode=mp_vision.RunningMode.IMAGE,
+    num_hands=2,
+    min_hand_detection_confidence=0.4,
+    min_hand_presence_confidence=0.4,
+    min_tracking_confidence=0.4
+)
+
+HAND_LANDMARKER = mp_vision.HandLandmarker.create_from_options(hand_options)
+print("[INIT] HandLandmarker chargé avec succès — mode CPU")
 
 
 def download_model_if_needed(model_path: str = "hand_landmarker.task"):
-    if not os.path.exists(model_path):
-        print(f"Downloading {model_path}...")
-        url = "https://storage.googleapis.com/mediapipe-models/hand_landmarker/hand_landmarker/float16/1/hand_landmarker.task"
-        urllib.request.urlretrieve(url, model_path)
-        print(f"{model_path} downloaded successfully!")
-    return model_path
+    # Cette fonction n'est plus utilisée mais gardée pour compatibilité
+    return MODEL_PATH
 
 
 def normalize_light(image_rgb: np.ndarray) -> np.ndarray:
@@ -336,29 +363,9 @@ def run_pipeline_mediapipe(image_rgb: np.ndarray, sensitivity: float = 1.8) -> D
         print(f"[PREPROCESS] {rapport['n_corrections']} corrections appliquées")
         
         # Étape 2 : détection main sur image corrigée
-        try:
-            model_path = download_model_if_needed()
-            
-            base_options = mp_python.BaseOptions(
-                model_asset_path=model_path,
-                delegate=mp_python.BaseOptions.Delegate.CPU
-            )
-            options = mp_vision.HandLandmarkerOptions(
-                base_options=base_options,
-                running_mode=mp_vision.RunningMode.IMAGE,
-                num_hands=2,
-                min_hand_detection_confidence=0.4,
-                min_hand_presence_confidence=0.4,
-                min_tracking_confidence=0.4
-            )
-            
-            detector = mp_vision.HandLandmarker.create_from_options(options)
-            
-            mp_image = mp.Image(image_format=mp.ImageFormat.SRGB, data=image_preprocessed)
-            detection_result = detector.detect(mp_image)
-        except Exception as e:
-            print(f"[ERROR] MediaPipe initialization failed: {e}")
-            raise
+        # Utiliser HAND_LANDMARKER global (déjà initialisé en mode CPU)
+        mp_image = mp.Image(image_format=mp.ImageFormat.SRGB, data=image_preprocessed)
+        detection_result = HAND_LANDMARKER.detect(mp_image)
         
         if not detection_result.hand_landmarks:
             print(f"[WARNING] Première tentative échouée. Image shape: {image_preprocessed.shape}")
@@ -367,7 +374,7 @@ def run_pipeline_mediapipe(image_rgb: np.ndarray, sensitivity: float = 1.8) -> D
                 print("[RETRY] Augmentation du contraste...")
                 enhanced = cv2.convertScaleAbs(image_preprocessed, alpha=1.8, beta=40)
                 mp_image_enhanced = mp.Image(image_format=mp.ImageFormat.SRGB, data=enhanced)
-                detection_result = detector.detect(mp_image_enhanced)
+                detection_result = HAND_LANDMARKER.detect(mp_image_enhanced)
                 
                 if detection_result.hand_landmarks:
                     print("[SUCCESS] Main détectée après augmentation du contraste!")
