@@ -1,18 +1,13 @@
-from fastapi import FastAPI, File, UploadFile, HTTPException, Request
+import time
+import io
+import numpy as np
+from PIL import Image
+from fastapi import FastAPI, File, UploadFile, Request, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
-from contextlib import asynccontextmanager
 from slowapi import Limiter, _rate_limit_exceeded_handler
 from slowapi.util import get_remote_address
 from slowapi.errors import RateLimitExceeded
-import cv2
-import numpy as np
-from PIL import Image
-import io
-import time
-from typing import Dict, Any
-import os
-
 from pipeline import run_pipeline_mediapipe as run_pipeline, preprocess_image, HAND_LANDMARKER
 
 # Configuration du rate limiting
@@ -64,112 +59,32 @@ async def health_check():
 
 
 @app.post("/analyze")
-@limiter.limit("10/minute;100/hour")
-async def analyze_image(
-    request: Request,
-    file: UploadFile = File(...),
-    sensitivity: float = 1.8
-) -> Dict[str, Any]:
-    if not model_loaded:
-        raise HTTPException(
-            status_code=503,
-            detail="Model not loaded. Please try again later."
-        )
-    
-    if not file.content_type or not file.content_type.startswith("image/"):
-        raise HTTPException(
-            status_code=400,
-            detail="File must be an image"
-        )
-    
+@limiter.limit("10/minute")
+async def analyze_image(request: Request, file: UploadFile = File(...)):
+    start_time = time.time()
+
     try:
-        start_time = time.time()
-        
         contents = await file.read()
-        print(f"[INFO] Received image, size: {len(contents)} bytes")
-        image = Image.open(io.BytesIO(contents))
-        print(f"[INFO] Image opened successfully: {image.size}, mode: {image.mode}")
-        
-        if image.mode != 'RGB':
-            image = image.convert('RGB')
-        
-        image_np = np.array(image)
-        h, w = image_np.shape[:2]
-        
-        # Vérification minimale : image trop petite pour être analysée
-        if h < 100 or w < 100:
-            return JSONResponse(
-                status_code=422,
-                content={
-                    'success': False,
-                    'error': 'IMAGE_TOO_SMALL',
-                    'message': f'Image vraiment trop petite ({w}x{h}). Minimum requis: 100x100',
-                    'processing_time_ms': int((time.time() - start_time) * 1000)
-                }
-            )
-        
-        print(f"[INFO] Image shape: {image_np.shape}")
-        
-        result = run_pipeline(image_np, sensitivity=sensitivity)
-        print(f"[INFO] Pipeline result: success={result.get('success')}, error={result.get('error')}")
-        
-        processing_time_ms = int((time.time() - start_time) * 1000)
-        
-        if not result.get('success', False):
-            # Cas spécifique : aucune main détectée
-            if result.get('error') == 'Aucune main détectée':
-                return JSONResponse(
-                    status_code=422,
-                    content={
-                        'success': False,
-                        'error':   'NO_HAND_DETECTED',
-                        'message': 'Main non détectée. Montrez votre paume ouverte, pouce et index bien visibles.',
-                        'processing_time_ms': processing_time_ms
-                    }
-                )
-            return JSONResponse(
-                status_code=422,
-                content={
-                    "success": False,
-                    "error": result.get('error', 'Unknown error'),
-                    "processing_time_ms": processing_time_ms
-                }
-            )
-        
-        response = {
-            "success": True,
-            "ink_detected": result.get('ink_detected', False),
-            "voted": result.get('voted', False),
-            "verdict": result.get('verdict', 'ABSENT'),
-            "score_global": result.get('score_global', 0),
-            "doigt_encre": result.get('best_finger', None),  # quel doigt a l'encre
-            "fraud": result.get('fraud', {
-                "suspected": False,
-                "score": 0,
-                "indicators": ["Aucun indicateur suspect"]
-            }),
-            "doigts": result.get('doigts', {}),
-            "processing_time_ms": processing_time_ms
-        }
-        
-        # Ajouter le rapport de prétraitement s'il existe
-        if 'preprocessing' in result:
-            response['preprocessing'] = result['preprocessing']
-        
-        if 'palm_color' in result:
-            response['palm_color'] = result['palm_color']
-        
-        return response
-        
-    except Exception as e:
-        return JSONResponse(
-            status_code=500,
-            content={
-                "success": False,
-                "error": f"Internal server error: {str(e)}",
-                "processing_time_ms": int((time.time() - start_time) * 1000) if 'start_time' in locals() else 0
-            }
-        )
+        image = Image.open(io.BytesIO(contents)).convert("RGB")
+        image_rgb = np.array(image)
+    except Exception:
+        raise HTTPException(status_code=400, detail={
+            "error": "IMAGE_INVALID",
+            "message": "Fichier image non lisible."
+        })
+
+    image_preprocessed, rapport = preprocess_image(image_rgb)
+    result = run_pipeline(image_preprocessed)
+
+    if not result.get("success"):
+        raise HTTPException(status_code=422, detail={
+            "error": result.get("error", "UNKNOWN"),
+            "message": result.get("message", "Analyse échouée.")
+        })
+
+    result["processing_time_ms"] = int((time.time() - start_time) * 1000)
+    result["preprocessing"] = rapport
+    return result
 
 
 if __name__ == "__main__":
