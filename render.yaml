@@ -4,7 +4,11 @@ services:
     env: python
     region: frankfurt
     plan: free
-    buildCommand: pip install uv && uv sync
+    buildCommand: >
+      pip install uv &&
+      apt-get update -y &&
+      apt-get install -y libgles2-mesa libgl1-mesa-glx &&
+      uv sync
     startCommand: bash startup.sh
     envVars:
       - key: PYTHON_VERSION

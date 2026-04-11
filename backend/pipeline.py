@@ -9,34 +9,34 @@ import urllib.request
 
 MODEL_PATH = os.path.join(os.path.dirname(__file__), "hand_landmarker.task")
 
-# ── Initialisation globale au chargement du module ──────────
-# Delegate.CPU = jamais de GPU, jamais d'OpenGL, aucune
-# dépendance graphique. Fonctionne sur tout serveur headless.
-print("[INIT] Chargement HandLandmarker en mode CPU...")
+def _init_landmarker():
+    """Initialise HandLandmarker en mode CPU pur"""
+    print("[INIT] Chargement HandLandmarker — mode CPU...")
+    
+    # Télécharger le modèle si nécessaire
+    if not os.path.exists(MODEL_PATH):
+        print(f"[INIT] Téléchargement du modèle...")
+        url = "https://storage.googleapis.com/mediapipe-models/hand_landmarker/hand_landmarker/float16/1/hand_landmarker.task"
+        urllib.request.urlretrieve(url, MODEL_PATH)
+        print(f"[INIT] Modèle téléchargé : {MODEL_PATH}")
+    
+    base_options = mp_python.BaseOptions(
+        model_asset_path=MODEL_PATH,
+        delegate=mp_python.BaseOptions.Delegate.CPU
+    )
+    options = mp_vision.HandLandmarkerOptions(
+        base_options=base_options,
+        running_mode=mp_vision.RunningMode.IMAGE,
+        num_hands=2,
+        min_hand_detection_confidence=0.4,
+        min_hand_presence_confidence=0.4,
+        min_tracking_confidence=0.4
+    )
+    landmarker = mp_vision.HandLandmarker.create_from_options(options)
+    print("[INIT] HandLandmarker OK — prêt")
+    return landmarker
 
-# Télécharger le modèle si nécessaire
-if not os.path.exists(MODEL_PATH):
-    print(f"[INIT] Téléchargement du modèle...")
-    url = "https://storage.googleapis.com/mediapipe-models/hand_landmarker/hand_landmarker/float16/1/hand_landmarker.task"
-    urllib.request.urlretrieve(url, MODEL_PATH)
-    print(f"[INIT] Modèle téléchargé : {MODEL_PATH}")
-
-base_options = mp_python.BaseOptions(
-    model_asset_path=MODEL_PATH,
-    delegate=mp_python.BaseOptions.Delegate.CPU   # ← CLEF DU FIX
-)
-
-hand_options = mp_vision.HandLandmarkerOptions(
-    base_options=base_options,
-    running_mode=mp_vision.RunningMode.IMAGE,
-    num_hands=2,
-    min_hand_detection_confidence=0.4,
-    min_hand_presence_confidence=0.4,
-    min_tracking_confidence=0.4
-)
-
-HAND_LANDMARKER = mp_vision.HandLandmarker.create_from_options(hand_options)
-print("[INIT] HandLandmarker chargé avec succès — mode CPU")
+HAND_LANDMARKER = _init_landmarker()
 
 
 def download_model_if_needed(model_path: str = "hand_landmarker.task"):

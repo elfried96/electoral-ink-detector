@@ -13,7 +13,7 @@ import time
 from typing import Dict, Any
 import os
 
-from pipeline import run_pipeline_mediapipe as run_pipeline, preprocess_image
+from pipeline import run_pipeline_mediapipe as run_pipeline, preprocess_image, HAND_LANDMARKER
 
 # Configuration du rate limiting
 limiter = Limiter(key_func=get_remote_address)
@@ -56,7 +56,6 @@ async def root():
 
 @app.get("/health")
 async def health_check():
-    from pipeline import HAND_LANDMARKER
     return {
         "status": "ok",
         "model_loaded": HAND_LANDMARKER is not None,
