@@ -4,8 +4,8 @@ services:
     runtime: docker
     dockerfilePath: ./backend/Dockerfile
     dockerContext: ./backend
-    region: frankfurt
     plan: free
     envVars:
       - key: PORT
         value: 10000
+    healthCheckPath: /health
