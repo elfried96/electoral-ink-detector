@@ -1,14 +1,12 @@
-import time
 import io
 import numpy as np
 from PIL import Image
 from fastapi import FastAPI, File, UploadFile, Request, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import JSONResponse
 from slowapi import Limiter, _rate_limit_exceeded_handler
 from slowapi.util import get_remote_address
 from slowapi.errors import RateLimitExceeded
-from pipeline import run_pipeline_mediapipe as run_pipeline, preprocess_image, HAND_LANDMARKER
+from pipeline import run_pipeline, preprocess_image, HAND_LANDMARKER
 
 # Configuration du rate limiting
 limiter = Limiter(key_func=get_remote_address)
@@ -61,6 +59,7 @@ async def health_check():
 @app.post("/analyze")
 @limiter.limit("10/minute")
 async def analyze_image(request: Request, file: UploadFile = File(...)):
+    import time
     start_time = time.time()
 
     try:
@@ -73,17 +72,15 @@ async def analyze_image(request: Request, file: UploadFile = File(...)):
             "message": "Fichier image non lisible."
         })
 
-    image_preprocessed, rapport = preprocess_image(image_rgb)
-    result = run_pipeline(image_preprocessed)
+    result = run_pipeline(image_rgb)
 
     if not result.get("success"):
         raise HTTPException(status_code=422, detail={
-            "error": result.get("error", "UNKNOWN"),
+            "error":   result.get("error", "UNKNOWN"),
             "message": result.get("message", "Analyse échouée.")
         })
 
     result["processing_time_ms"] = int((time.time() - start_time) * 1000)
-    result["preprocessing"] = rapport
     return result
 
 

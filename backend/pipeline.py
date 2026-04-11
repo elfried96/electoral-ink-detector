@@ -346,136 +346,66 @@ def detect_fraud(image_rgb: np.ndarray) -> Dict:
 
 
 def run_pipeline_mediapipe(image_rgb: np.ndarray, sensitivity: float = 1.8) -> Dict:
-    try:
-        # Étape 1 : prétraitement automatique
-        image_preprocessed, rapport = preprocess_image(image_rgb)
-        print(f"[PREPROCESS] {rapport['n_corrections']} corrections appliquées")
-        
-        # Étape 2 : détection main sur image corrigée
-        # Utiliser HAND_LANDMARKER global (déjà initialisé en mode CPU)
-        mp_image = mp.Image(image_format=mp.ImageFormat.SRGB, data=image_preprocessed)
-        detection_result = HAND_LANDMARKER.detect(mp_image)
-        
-        if not detection_result.hand_landmarks:
-            print(f"[WARNING] Première tentative échouée. Image shape: {image_preprocessed.shape}")
-            # Une seule tentative de retry avec plus de contraste
-            try:
-                print("[RETRY] Augmentation du contraste...")
-                enhanced = cv2.convertScaleAbs(image_preprocessed, alpha=1.8, beta=40)
-                mp_image_enhanced = mp.Image(image_format=mp.ImageFormat.SRGB, data=enhanced)
-                detection_result = HAND_LANDMARKER.detect(mp_image_enhanced)
-                
-                if detection_result.hand_landmarks:
-                    print("[SUCCESS] Main détectée après augmentation du contraste!")
-                    hand_landmarks = detection_result.hand_landmarks[0]
-                    image_preprocessed = enhanced  # Utiliser l'image améliorée pour la suite
-            except Exception as e:
-                print(f"[ERROR] Retry failed: {e}")
-            
-            # Si toujours pas de main détectée
-            if not detection_result.hand_landmarks:
-                fraud_result = detect_fraud(image_preprocessed)
-                return {
-                    'success': False,
-                    'error': 'NO_HAND_DETECTED',
-                    'message': 'Main non détectée. Montrez votre paume ouverte face à la caméra.',
-                    'preprocessing': rapport,
-                    'ink_detected': False,
-                    'voted': False,
-                    'verdict': 'ERREUR',
-                    'score_global': 0.0,
-                    'n_doigts_detectes': 0,
-                    'fraud': {
-                        'suspected': bool(fraud_result.get('suspected', False)),
-                        'score': int(fraud_result.get('score', 0)),
-                        'indicators': list(fraud_result.get('indicators', []))
-                    },
-                    'doigts': {}
-                }
-        else:
-            hand_landmarks = detection_result.hand_landmarks[0]
-        
-        palm_color = get_palm_color(image_preprocessed, hand_landmarks)
-        
-        if palm_color is None:
-            fraud_result = detect_fraud(image_preprocessed)
-            return {
-                'success': False,
-                'error': 'Impossible d\'extraire la couleur de la paume',
-                'preprocessing': rapport,
-                'ink_detected': False,
-                'voted': False,
-                'verdict': 'ERREUR',
-                'score_global': 0.0,
-                'n_doigts_detectes': 0,
-                'fraud': {
-                    'suspected': bool(fraud_result.get('suspected', False)),
-                    'score': int(fraud_result.get('score', 0)),
-                    'indicators': list(fraud_result.get('indicators', []))
-                },
-                'doigts': {}
-            }
-        
-        finger_results = {}
-        
-        for finger_name in ['pouce', 'index']:
-            finger_region, bbox = crop_finger(image_preprocessed, hand_landmarks, finger_name)
-            if finger_region is not None:
-                finger_results[finger_name] = analyze_ink_adaptive(
-                    finger_region, palm_color, sensitivity
-                )
-            else:
-                finger_results[finger_name] = {
-                    'ink_detected': False,
-                    'score': 0.0,
-                    'confidence': 0.0,
-                    'details': f'{finger_name} non trouvé'
-                }
-        
-        final_score = score_final(finger_results)
-        fraud_result = detect_fraud(image_preprocessed)
-        
-        return {
-            'success': True,
-            'ink_detected': bool(final_score['ink_detected']),
-            'voted': bool(final_score['voted']),
-            'verdict': str(final_score['verdict']),
-            'score_global': float(final_score['score_global']),
-            'best_finger': final_score.get('best_finger'),  # quel doigt a l'encre
-            'fraud': {
-                'suspected': bool(fraud_result.get('suspected', False)),
-                'score': int(fraud_result.get('score', 0)),
-                'indicators': list(fraud_result.get('indicators', []))
-            },
-            'doigts': {
-                name: {
-                    'ink_detected': bool(result['ink_detected']),
-                    'score_pct': float(result['score']),
-                    'confidence': float(result['confidence'])
-                }
-                for name, result in finger_results.items()
-            },
-            'palm_color': {
-                'h': float(palm_color['h']),
-                's': float(palm_color['s']),
-                'v': float(palm_color['v'])
-            },
-            'preprocessing': rapport  # Ajouter le rapport de prétraitement
-        }
-            
-    except Exception as e:
+    # 1. Prétraitement
+    image_preprocessed, rapport = preprocess_image(image_rgb)
+
+    # 2. Détection main
+    mp_img = mp.Image(
+        image_format=mp.ImageFormat.SRGB,
+        data=image_preprocessed
+    )
+    result = HAND_LANDMARKER.detect(mp_img)
+
+    if not result.hand_landmarks:
         return {
             'success': False,
-            'error': str(e),
-            'ink_detected': False,
-            'voted': False,
-            'verdict': 'ERREUR',
-            'score_global': 0.0,
-            'n_doigts_detectes': 0,
-            'fraud': {
-                'suspected': False,
-                'score': 0,
-                'indicators': []
-            },
-            'doigts': {}
+            'error': 'NO_HAND_DETECTED',
+            'message': 'Main non détectée. Montrez votre paume ouverte, pouce et index bien visibles.'
         }
+
+    # 3. Analyser première main détectée
+    lm_list    = result.hand_landmarks[0]
+    handedness = result.handedness[0][0].category_name if result.handedness else "Unknown"
+
+    # 4. Couleur référence paume
+    palm_color = get_palm_color(image_preprocessed, lm_list)
+
+    # 5. Analyser pouce et index
+    finger_results = {}
+    for fname in ['pouce', 'index']:
+        crop, bbox = crop_finger(image_preprocessed, lm_list, fname)
+        if crop is not None:
+            finger_results[fname] = {
+                **analyze_ink_adaptive(crop, palm_color, sensitivity),
+                'crop': None,   # pas sérialisable
+                'bbox': [int(x) for x in bbox] if bbox else None
+            }
+
+    # 6. Score final
+    final = score_final(finger_results)
+    fraud = detect_fraud(image_preprocessed)
+
+    return {
+        'success':      True,
+        'ink_detected': bool(final['ink_detected']),
+        'voted':        bool(final['ink_detected']),
+        'verdict':      final['verdict'],
+        'doigt_encre':  final.get('best_finger'),
+        'score_global': round(float(final['score_global']) * 100, 2),
+        'n_doigts_detectes': int(final['n_doigts']),
+        'fraud': {
+            'suspected':  bool(fraud['suspected']),
+            'score':      int(fraud['score']),
+            'indicators': fraud['indicators']
+        },
+        'doigts': {
+            fname: {
+                'ink_detected': bool(r['ink_detected']),
+                'score_pct':    round(float(r['score']) * 100, 2),
+                'confidence':   round(float(r['confidence']), 3)
+            }
+            for fname, r in finger_results.items()
+        }
+    }
+# Alias pour compatibilité
+run_pipeline = run_pipeline_mediapipe
