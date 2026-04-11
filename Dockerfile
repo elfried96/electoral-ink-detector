@@ -1,8 +1,9 @@
-FROM python:3.12-slim
+FROM python:3.12-slim-bookworm
 
 RUN apt-get update && apt-get install -y \
-    libgles2 \
-    libgl1 \
+    libgles2-mesa \
+    libgl1-mesa-glx \
+    libegl1-mesa \
     libglib2.0-0 \
     libsm6 \
     libxext6 \
@@ -21,8 +22,8 @@ COPY backend/ .
 RUN uv sync --frozen --no-dev
 
 RUN wget -q \
-    "https://storage.googleapis.com/mediapipe-models/hand_landmarker/hand_landmarker/float16/1/hand_landmarker.task" \
-    -O hand_landmarker.task
+  "https://storage.googleapis.com/mediapipe-models/hand_landmarker/hand_landmarker/float16/1/hand_landmarker.task" \
+  -O hand_landmarker.task
 
 EXPOSE 10000
 
