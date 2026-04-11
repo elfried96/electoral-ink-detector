@@ -16,9 +16,9 @@ options = mp_vision.HandLandmarkerOptions(
     base_options=base_options,
     running_mode=mp_vision.RunningMode.IMAGE,
     num_hands=2,
-    min_hand_detection_confidence=0.4,
-    min_hand_presence_confidence=0.4,
-    min_tracking_confidence=0.4
+    min_hand_detection_confidence=0.2,
+    min_hand_presence_confidence=0.2,
+    min_tracking_confidence=0.2
 )
 HAND_LANDMARKER = mp_vision.HandLandmarker.create_from_options(options)
 print("[INIT] HandLandmarker OK")
@@ -109,13 +109,12 @@ def preprocess_image(image_rgb: np.ndarray) -> tuple[np.ndarray, Dict]:
         corrections.append(f"Netteté améliorée (score: {sharpness:.0f})")
 
     # ── 4. CORRECTION ROTATION ───────────────────────────────
-    # Détecter si l'image est en portrait ou paysage
-    # Si paysage (largeur > hauteur) → rotation 90° pour avoir
-    # la main en portrait (plus facile pour MediaPipe)
-    h2, w2 = img.shape[:2]
-    if w2 > h2 * 1.2:
-        img = cv2.rotate(img, cv2.ROTATE_90_CLOCKWISE)
-        corrections.append(f"Rotation 90° (paysage → portrait)")
+    # DÉSACTIVÉ : rotation automatique peut casser la détection
+    # sur certaines images (ex: Bénin en format paysage)
+    # h2, w2 = img.shape[:2]
+    # if w2 > h2 * 1.2:
+    #     img = cv2.rotate(img, cv2.ROTATE_90_CLOCKWISE)
+    #     corrections.append(f"Rotation 90° (paysage → portrait)")
 
     # ── 5. RÉDUCTION BRUIT ───────────────────────────────────
     # Filtre bilatéral : réduit le bruit en préservant les bords
@@ -263,7 +262,7 @@ def analyze_ink_adaptive(region_rgb: np.ndarray, palm_color: Dict,
     
     return {
         'ink_detected': score >= SEUIL,
-        'score':        round(score * 100, 2),  # Convertir en pourcentage
+        'score':        score,  # Garder entre 0 et 1
         'confidence':   round(min(score / SEUIL, 1.0), 3),
         'method':       'adaptive_hsv_constrained',
         'mask':         ink_mask,
