@@ -16,14 +16,13 @@ RUN pip install uv
 
 WORKDIR /app
 
-COPY backend/pyproject.toml backend/uv.lock ./
+COPY backend/ .
+
 RUN uv sync --frozen --no-dev
 
 RUN wget -q \
     "https://storage.googleapis.com/mediapipe-models/hand_landmarker/hand_landmarker/float16/1/hand_landmarker.task" \
     -O hand_landmarker.task
-
-COPY backend/ .
 
 EXPOSE 10000
 
