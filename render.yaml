@@ -1,15 +1,11 @@
 services:
   - type: web
     name: ink-detection-api
-    env: python
+    runtime: docker
+    dockerfilePath: ./backend/Dockerfile
+    dockerContext: ./backend
     region: frankfurt
     plan: free
-    buildCommand: >
-      pip install uv &&
-      apt-get update -y &&
-      apt-get install -y libgles2-mesa libgl1-mesa-glx &&
-      uv sync
-    startCommand: bash startup.sh
     envVars:
-      - key: PYTHON_VERSION
-        value: 3.12.0
+      - key: PORT
+        value: 10000
