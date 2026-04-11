@@ -278,32 +278,22 @@ def analyze_ink_adaptive(region_rgb: np.ndarray, palm_color: Dict,
     }
 
 
-def score_final(finger_results: Dict[str, Dict]) -> Dict:
-    """
-    Calcule le score final basé sur les résultats des doigts.
-    L'encre électorale est apposée sur UN SEUL doigt (pouce OU index).
-    Il suffit qu'UN des deux soit positif pour confirmer le vote.
-    """
+def score_final(finger_results):
     pouce_ink = finger_results.get('pouce', {}).get('ink_detected', False)
     index_ink = finger_results.get('index', {}).get('ink_detected', False)
+    pouce_score = finger_results.get('pouce', {}).get('score', 0.0)
+    index_score = finger_results.get('index', {}).get('score', 0.0)
 
-    pouce_score = finger_results.get('pouce', {}).get('score', 0)
-    index_score = finger_results.get('index', {}).get('score', 0)
-
-    # Le doigt avec le meilleur score est le doigt marqué
-    best_score = max(pouce_score, index_score)
-    best_finger = 'index' if index_score >= pouce_score else 'pouce'
-
-    # UN seul doigt positif = vote confirmé
-    has_ink = pouce_ink or index_ink
+    has_ink    = bool(pouce_ink) or bool(index_ink)
+    best_score = max(float(pouce_score), float(index_score))
+    best_finger = 'index' if float(index_score) >= float(pouce_score) else 'pouce'
 
     return {
-        'ink_detected': has_ink,
-        'verdict': 'CERTAIN' if has_ink else 'ABSENT',
-        'score_global': round(best_score, 5),
-        'best_finger': best_finger if has_ink else None,  # quel doigt a l'encre
-        'n_doigts_detectes': 1 if has_ink else 0,
-        'voted': has_ink
+        'ink_detected':  has_ink,
+        'verdict':       'CERTAIN' if has_ink else 'ABSENT',
+        'score_global':  best_score,
+        'best_finger':   best_finger if has_ink else None,
+        'n_doigts':      int(bool(pouce_ink)) + int(bool(index_ink))
     }
 
 
@@ -386,17 +376,17 @@ def run_pipeline_mediapipe(image_rgb: np.ndarray, sensitivity: float = 1.8) -> D
     fraud = detect_fraud(image_preprocessed)
 
     return {
-        'success':      True,
-        'ink_detected': bool(final['ink_detected']),
-        'voted':        bool(final['ink_detected']),
-        'verdict':      final['verdict'],
-        'doigt_encre':  final.get('best_finger'),
-        'score_global': round(float(final['score_global']) * 100, 2),
+        'success':           True,
+        'ink_detected':      bool(final['ink_detected']),
+        'voted':             bool(final['ink_detected']),
+        'verdict':           str(final['verdict']),
+        'doigt_encre':       str(final.get('best_finger', '')),
+        'score_global':      round(float(final['score_global']) * 100, 2),
         'n_doigts_detectes': int(final['n_doigts']),
         'fraud': {
             'suspected':  bool(fraud['suspected']),
             'score':      int(fraud['score']),
-            'indicators': fraud['indicators']
+            'indicators': [str(i) for i in fraud['indicators']]
         },
         'doigts': {
             fname: {
@@ -405,6 +395,7 @@ def run_pipeline_mediapipe(image_rgb: np.ndarray, sensitivity: float = 1.8) -> D
                 'confidence':   round(float(r['confidence']), 3)
             }
             for fname, r in finger_results.items()
+            if fname in ['pouce', 'index']
         }
     }
 # Alias pour compatibilité
